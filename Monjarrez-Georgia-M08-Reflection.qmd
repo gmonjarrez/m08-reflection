@@ -1,0 +1,183 @@
+---
+title: "Summary Tables with gtsummary"
+subtitle: "M08 Reflection · The Restaurant at Kellogg Ranch"
+author: "Georgia Monjarrez"
+institute: "IBM 6400, Cal Poly Pomona"
+date: "2026-11-09"
+format:
+  revealjs:
+    theme: [serif, theme.scss]
+    width: 1600
+    height: 900
+    footer: "IBM 6400 · M08 Reflection"
+    logo: m08.svg
+    transition: slide
+    incremental: false
+    toc: true
+    toc-depth: 1
+    slide-number: true
+    scrollable: true
+    smaller: true
+    code-fold: false
+    code-overflow: wrap
+    embed-resources: true
+editor: visual
+execute:
+  echo: true
+  freeze: auto
+---
+
+# Reflection
+
+## 1 · What gtsummary can do
+
+> In Step 1, you have seen how to create a summary table and modify it for various statistical analyses. Summarize the package's capabilities as explained by the speaker. How may the {gtsummary} benefit you for your school work or career?
+
+::: {.columns}
+::: {.column width="51%"}
+**From data to a summary**
+
+`tbl_summary()` produces counts and percentages for categories and summaries such as a median and interquartile range for numeric measures. With `by`, the same summaries appear side by side for each group. I can choose the statistics, set readable labels, and show how many responses are missing.
+:::
+::: {.column width="46%"}
+**From a summary to a report**
+
+`add_overall()` adds an overall column, and `add_p()` can add group comparisons when a suitable test is available. `tbl_cross()` summarizes two categorical variables, and `tbl_regression()` formats a fitted model with estimates and confidence intervals.
+:::
+:::
+
+For the RKR project, I could use one table to compare survey answers by group and show how many people answered each question. I could reuse that setup for recurring marketing reports as new responses come in.
+
+::: {.notes}
+Use the RKR website question to explain why a denominator can change when some respondents skip a question.
+:::
+
+## 2.1 · How the three packages fit together
+
+> In Step 2, you watched the extended presentation of the {gtsummary} package by Dr. Daniel Djsoberg, the very creator of the package. How does it differ from gt and gtExtras?
+
+::: {.incremental}
+- **gtsummary** organizes statistical results. I would use it to calculate group summaries or turn a fitted model into a readable table.
+- **gt** controls the presentation of tabular data, including headings, spanners, number formatting, and source notes. A gtsummary table can be converted with `as_gt()`.
+- **gtExtras** adds presentation features to an existing gt table, such as a sparkline showing how a metric changes over time.
+:::
+
+. . .
+
+I’d use gtsummary to report the RKR model estimates and gt to add a note identifying which responses were included.
+
+## 2.2 · Three techniques beyond a basic summary
+
+> Give three things you learned newly that were not explained in the lecture in Step 1.
+
+::: {.incremental}
+1. **Compare model specifications with `tbl_merge()`.** Putting a simple model and an adjusted model side by side makes it easier to see how an estimate shifts after other variables enter the model. I would use the same analysis sample for both models so that a change in the estimate is easier to interpret.
+2. **Set report-wide defaults with a theme.** A gtsummary theme can set a consistent convention for rounding and formatting p-values. 
+3. **Use `as_gt()` for the final presentation layer.** After setting labels and confidence intervals in gtsummary, I can convert the table and add a source note in gt. The note can explain the denominator or the coding of an outcome.
+:::
+
+::: {.aside}
+These examples draw on the package documentation. Their coverage in the two course lectures is unverified.
+:::
+
+# CEP analysis
+
+## 3 · Website use and prior dining
+
+> Apply what you learned to your MSDM CEP data. Choose two appropriate variables for cross-tabulation and show if the two variables are associated or not. Use appropriate statistics to test if the two variables are associated. Code, produce the table, and interpret the result.
+
+I chose **prior website use** (Q36) and **prior dining** (Q5). Both questions have Yes, No, and Not sure responses. Column percentages would show the distribution of dining history within each website-use group. “Not sure” is a valid response and would stay in the table when observed.^[Rows missing either question would be excluded from the test.]
+
+::: {.status}
+**November 1 export.** Four records were recorded, three were incomplete, and the sole complete candidate was pending study-status verification. The verified analysis sample is empty. An association test requires variation in both variables, so this export yields no interpretable p-value or conclusion about association.
+:::
+
+## 3 · Cross-tabulation code {.scrollable}
+
+Set `RKR_VERIFIED_DATA` to a private cleaned SPSS file containing only verified, eligible study responses, with one row per respondent. The variable names below match the CEP data-preparation output.
+
+```{r}
+#| label: cross-tab
+#| eval: false
+library(gtsummary)
+cep <- haven::read_sav(Sys.getenv("RKR_VERIFIED_DATA"))
+
+cross <- na.omit(data.frame(
+  website = factor(as.numeric(cep$prior_website_use),
+    levels = 1:3, labels = c("Yes", "No", "Not sure")),
+  diner = factor(as.numeric(cep$prior_diner),
+    levels = 1:3, labels = c("Yes", "No", "Not sure"))
+))
+cross <- droplevels(cross)
+counts <- with(cross, table(diner, website))
+if (all(dim(counts) >= 2)) {
+  expected <- outer(rowSums(counts), colSums(counts)) / sum(counts)
+  test <- if (all(expected >= 5)) "chisq.test" else "fisher.test"
+
+  tbl_cross(cross, row = diner, col = website, percent = "column",
+    label = list(diner ~ "Dined at RKR before",
+                 website ~ "Visited the RKR website before")) |>
+    add_p(test = test) |>
+    modify_caption("**Prior dining by prior website use**")
+} else {
+  message("An association test requires two observed levels in each variable.")
+}
+```
+
+## 4 · Dining experience and return intention
+
+> Using the MSDM CEP data, run multiple regression. The dependent variable can be continuous or dichotomous. Regress a dependent variable on a set of independent variables. Code, produce the table, and interpret the result.
+
+Among prior diners, I would model whether they said they were **likely or very likely to return** (Q12 scores 4–5, compared with 1–3). The predictors are ratings of food quality (Q10_1), friendly service (Q10_5), and pleasant atmosphere (Q10_9). Treating each 1–5 predictor as numeric assumes that a one-point increase has the same effect on log odds across its scale.
+
+::: {.status .fragment}
+**Result from the available export.** There are zero confirmed study cases and at most one complete candidate. The model requires both outcome groups and enough complete diners to estimate the three adjusted associations. Adjusted odds ratios and confidence intervals are unavailable.
+:::
+
+::: {.notes}
+With usable data, report the complete-case count and outcome split. Check separation, predictor overlap, and whether numeric rating scores make sense on the log-odds scale before reporting estimates.
+:::
+
+## 4 · Multiple logistic regression code {.scrollable}
+
+```{r}
+#| label: return-model
+#| eval: false
+diners <- cep[!is.na(cep$prior_diner) & cep$prior_diner == 1, ]
+model_data <- na.omit(data.frame(
+  likely_return = as.integer(as.numeric(diners$return_intention) >= 4),
+  food = as.numeric(diners$food_1),
+  service = as.numeric(diners$service_1),
+  atmosphere = as.numeric(diners$atmosphere_1)
+))
+if (nrow(model_data) > 4 && length(unique(model_data$likely_return)) == 2) {
+  model <- glm(likely_return ~ food + service + atmosphere,
+    data = model_data, family = binomial())
+  if (model$converged && model$rank == 4L && !model$boundary) {
+    tbl_regression(model, exponentiate = TRUE,
+      label = list(food ~ "Food was high quality",
+                   service ~ "Service was friendly",
+                   atmosphere ~ "Atmosphere was pleasant")) |>
+      modify_caption("**Adjusted odds of likely return among prior diners**")
+  }
+} else {
+  message("Insufficient complete cases or outcome variation.")
+}
+```
+
+An odds ratio above 1 would indicate higher estimated odds of likely return per one-point increase in that rating, holding the other two ratings constant. Return intention is a stated plan, so the model would describe associations with intent.
+
+# References and appendix
+
+## References
+
+- Daniel D. Sjoberg and contributors. [gtsummary summary-table tutorial](https://www.danieldsjoberg.com/gtsummary/articles/tbl_summary.html), [regression-table tutorial](https://www.danieldsjoberg.com/gtsummary/articles/tbl_regression.html), [table merging](https://www.danieldsjoberg.com/gtsummary/reference/tbl_merge.html), and [themes](https://www.danieldsjoberg.com/gtsummary/articles/themes.html).
+- Posit. [gt package documentation](https://gt.rstudio.com/).
+- Thomas Mock and contributors. [gtExtras sparklines reference](https://jthomasmock.github.io/gtExtras/reference/gt_plt_sparkline.html).
+- Georgia Monjarrez. *CEP 11 Data Preparation*, November 1, 2026. Group 9 RKR survey export, screening summary, and source dictionary.
+- Posit. [Quarto Reveal.js documentation](https://quarto.org/docs/presentations/revealjs/).
+
+## Appendix · GitHub
+
+- [GitHub repository](https://github.com/gmonjarrez/m08-reflection)
+- [GitHub Pages presentation](https://gmonjarrez.github.io/m08-reflection/)
